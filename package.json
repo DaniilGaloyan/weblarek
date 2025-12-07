@@ -12,5 +12,10 @@
     "sass-embedded": "^1.90.0",
     "typescript": "~5.8.3",
     "vite": "^7.1.0"
-  }
+  },
+  "description": "Стек: HTML, SCSS, TS, Vite",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
