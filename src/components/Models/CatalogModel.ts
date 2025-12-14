@@ -1,4 +1,5 @@
-import { IProduct } from "../../types";
+import { IProduct, CatalogChangedEvent, SelectedItemChangedEvent } from "../../types";
+import { IEvents } from "../base/Events";
 
 /**
  * Класс модели данных для хранения каталога товаров
@@ -16,17 +17,33 @@ export class CatalogModel {
   private _selectedItem: IProduct | null = null;
 
   /**
-   * Сохраняет массив товаров в каталог
+   * @type {IEvents} - брокер событий
+   */
+  private events: IEvents;
+
+  /**
+   * Создает экземпляр модели каталога товаров
+   * @param {IEvents} events - брокер событий
+   */
+  constructor(events: IEvents) {
+    this.events = events;
+  }
+
+  /**
+   * Сохраняет массив товаров в каталог и генерирует событие
    * @param {IProduct[]} items - массив товаров для сохранения
    * @returns {void}
    */
   setItems(items: IProduct[]): void {
     this._items = items;
+    this.events.emit<CatalogChangedEvent>("catalog:changed", {
+      items: this._items,
+    });
   }
 
   /**
    * Возвращает все товары каталога
-   * @returns {void} - массив товаров
+   * @returns {IProduct[]} - массив товаров
    */
   getItems(): IProduct[] {
     return this._items;
@@ -42,12 +59,15 @@ export class CatalogModel {
   }
 
   /**
-   * Сохраняет товар для детального просмотра
+   * Сохраняет товар для детального просмотра и генерирует событие
    * @param {IProduct} item - товар для сохранения
    * @returns {void}
    */
   setSelectedItem(item: IProduct): void {
     this._selectedItem = item;
+    this.events.emit<SelectedItemChangedEvent>("selectedItem:changed", {
+      selectedItem: this._selectedItem,
+    });
   }
 
   /**

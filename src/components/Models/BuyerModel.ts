@@ -1,4 +1,5 @@
 import { IBuyer, TPayment } from "../../types";
+import { IEvents } from "../base/Events";
 
 /**
  * Класс модели данных для хранения и валидации данных покупателя
@@ -11,12 +12,26 @@ export class BuyerModel {
   private _data: Partial<IBuyer> = {};
 
   /**
-   * Сохраняет данные покупателя (можно передать как все поля, так и часть)
+   * @type {IEvents} - брокер событий
+   */
+  private events: IEvents;
+
+  /**
+   * Создает экземпляр модели данных покупателя
+   * @param {IEvents} events - брокер событий
+   */
+  constructor(events: IEvents) {
+    this.events = events;
+  }
+
+  /**
+   * Сохраняет данные покупателя и генерирует событие
    * @param {Partial<IBuyer>} data - данные покупателя для сохранения
    * @returns {void}
    */
   setData(data: Partial<IBuyer>): void {
     this._data = { ...this._data, ...data };
+    this.events.emit<{ data: Partial<IBuyer> }>('buyer:changed', { data: this._data });
   }
 
   /**
@@ -28,11 +43,12 @@ export class BuyerModel {
   }
 
   /**
-   * Очищает все данные покупателя
+   * Очищает все данные покупателя и генерирует событие
    * @returns {void}
    */
   clear(): void {
     this._data = {};
+    this.events.emit<{ data: Partial<IBuyer> }>('buyer:changed', { data: this._data });
   }
 
   /**
