@@ -131,3 +131,42 @@ export interface CardButtonClickEvent {
 export interface BasketRemoveEvent {
   id: string; // идентификатор удаляемого товара
 }
+
+/**
+ * Интерфейс, описывающий событие выбора способа оплаты
+ */
+export interface PaymentSelectedEvent {
+  payment: string;
+}
+
+/**
+ * Интерфейс, описывающий событие изменения поля формы заказа
+ */
+export interface OrderFieldChangedEvent {
+  field: string;
+  value: string;
+}
+
+/**
+ * Интерфейс, описывающий событие изменения поля формы контактов
+ */
+export interface ContactsFieldChangedEvent {
+  field: string;
+  value: string;
+}
+
+/**
+ * Интерфейс, описывающий событие отправки формы заказа
+ */
+export interface OrderSubmitEvent {
+  payment: string;
+  address: string;
+}
+
+/**
+ * Интерфейс, описывающий событие отправки формы контактов
+ */
+export interface ContactsSubmitEvent {
+  email: string;
+  phone: string;
+}

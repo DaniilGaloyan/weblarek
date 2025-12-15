@@ -24,6 +24,13 @@ import {
   BasketRemoveEvent,
   SelectedItemChangedEvent,
   CartChangedEvent,
+  PaymentSelectedEvent,
+  OrderFieldChangedEvent,
+  ContactsFieldChangedEvent,
+  OrderSubmitEvent,
+  ContactsSubmitEvent,
+  IBuyer,
+  TPayment,
 } from "./types";
 
 /**
@@ -43,6 +50,10 @@ class AppPresenter {
 
   // Текущее открытое представление в модальном окне
   private currentBasketView: BasketView | null = null;
+
+  // Представления форм
+  private orderFormView: OrderForm | null = null;
+  private contactsFormView: ContactsForm | null = null;
 
   // Сервисы
   private apiService: ApiService;
@@ -134,7 +145,7 @@ class AppPresenter {
     });
 
     // Обработка события отправки формы заказа (первый шаг)
-    this.events.on(
+    this.events.on<OrderSubmitEvent>(
       "order:submit",
       (data: { payment: string; address: string }) => {
         this.handleOrderSubmit(data);
@@ -142,7 +153,7 @@ class AppPresenter {
     );
 
     // Обработка события отправки формы контактов (второй шаг)
-    this.events.on(
+    this.events.on<ContactsSubmitEvent>(
       "contacts:submit",
       (data: { email: string; phone: string }) => {
         this.handleContactsSubmit(data);
@@ -158,11 +169,6 @@ class AppPresenter {
     this.events.on("success:close", () => {
       this.modalView.close();
       this.currentBasketView = null;
-    });
-
-    // Обработка события ошибки формы
-    this.events.on("form:error", (data: { errors: Record<string, string> }) => {
-      console.error("Ошибка формы:", data.errors);
     });
 
     // Обработка события клика на кнопку в карточке товара
@@ -186,6 +192,135 @@ class AppPresenter {
     this.events.on<BasketRemoveEvent>("basket:remove", (data) => {
       this.cartModel.removeItem(data.id);
     });
+
+    // Обработка события выбора способа оплаты
+    this.events.on<PaymentSelectedEvent>("payment:selected", (data) => {
+      this.handlePaymentSelected(data.payment);
+    });
+
+    // Обработка события изменения поля формы заказа
+    this.events.on<OrderFieldChangedEvent>("order:field-changed", (data) => {
+      this.handleOrderFieldChanged(data.field, data.value);
+    });
+
+    // Обработка события изменения поля формы контактов
+    this.events.on<ContactsFieldChangedEvent>("contacts:field-changed", (data) => {
+      this.handleContactsFieldChanged(data.field, data.value);
+    });
+
+    // Обработка события изменения данных покупателя
+    this.events.on<{ data: Partial<IBuyer> }>('buyer:changed', (eventData) => {
+      // Если данные очищены, сбрасываем формы
+      if (Object.keys(eventData.data).length === 0) {
+        // Сбрасываем формы
+        if (this.orderFormView) {
+          this.orderFormView.resetTouched();
+        }
+        if (this.contactsFormView) {
+          this.contactsFormView.resetTouched();
+        }
+      }
+    });
+  }
+
+  /**
+   * Обрабатывает выбор способа оплаты
+   */
+  private handlePaymentSelected(payment: string): void {
+    // Сохраняем данные в модели
+    this.buyerModel.setData({ payment: payment as TPayment });
+    
+    // Обновляем отображение формы
+    if (this.orderFormView) {
+      this.orderFormView.setPayment(payment);
+    }
+    
+    // Выполняем валидацию и обновляем форму
+    this.updateOrderFormValidation();
+  }
+
+  /**
+   * Обрабатывает изменение поля формы заказа
+   */
+  private handleOrderFieldChanged(field: string, value: string): void {
+    if (field === "address") {
+      // Сохраняем данные в модели
+      this.buyerModel.setData({ address: value });
+      
+      // Выполняем валидацию и обновляем форму
+      this.updateOrderFormValidation();
+    }
+  }
+
+  /**
+   * Обрабатывает изменение поля формы контактов
+   */
+  private handleContactsFieldChanged(field: string, value: string): void {
+    const data: Partial<IBuyer> = {};
+    
+    if (field === "email") {
+      data.email = value;
+    } else if (field === "phone") {
+      data.phone = value;
+    }
+    
+    // Сохраняем данные в модели
+    this.buyerModel.setData(data);
+    
+    // Выполняем валидацию и обновляем форму
+    this.updateContactsFormValidation();
+  }
+
+  /**
+   * Обновляет валидацию и состояние формы заказа
+   */
+  private updateOrderFormValidation(): void {
+    if (!this.orderFormView) return;
+    
+    // Получаем ошибки валидации для полей формы заказа
+    const errors = this.buyerModel.validate(['payment', 'address']);
+    
+    // Передаем ошибки в форму
+    if (errors) {
+      const orderErrors: Record<string, string> = {};
+      if (errors.payment) orderErrors.payment = errors.payment;
+      if (errors.address) orderErrors.address = errors.address;
+      this.orderFormView.setValidationErrors(orderErrors);
+      this.orderFormView.setSubmitEnabled(false);
+    } else {
+      this.orderFormView.setValidationErrors({});
+      
+      // Проверяем что поля заполнены
+      const isFormComplete = this.buyerModel.isOrderStepComplete();
+      
+      this.orderFormView.setSubmitEnabled(isFormComplete);
+    }
+  }
+
+  /**
+   * Обновляет валидацию и состояние формы контактов
+   */
+  private updateContactsFormValidation(): void {
+    if (!this.contactsFormView) return;
+    
+    // Получаем ошибки валидации для полей формы контактов
+    const errors = this.buyerModel.validate(['email', 'phone']);
+    
+    // Передаем ошибки в форму
+    if (errors) {
+      const contactsErrors: Record<string, string> = {};
+      if (errors.email) contactsErrors.email = errors.email;
+      if (errors.phone) contactsErrors.phone = errors.phone;
+      this.contactsFormView.setValidationErrors(contactsErrors);
+      this.contactsFormView.setSubmitEnabled(false);
+    } else {
+      this.contactsFormView.setValidationErrors({});
+      
+      // Проверяем что поля заполнены
+      const isFormComplete = this.buyerModel.isContactsStepComplete();
+      
+      this.contactsFormView.setSubmitEnabled(isFormComplete);
+    }
   }
 
   /**
@@ -331,36 +466,41 @@ class AppPresenter {
    * Открытие формы заказа в модальном окне (первый шаг)
    */
   private openOrderForm(): void {
+    // Создаем форму, если еще не создана
+    if (!this.orderFormView) {
+      const orderContainer = cloneTemplate(this.orderTemplate);
+      this.orderFormView = new OrderForm(
+        orderContainer as HTMLFormElement,
+        this.events
+      );
+    }
+    
     const data = this.buyerModel.getData();
-
-    const orderContainer = cloneTemplate(this.orderTemplate);
-    const orderFormView = new OrderForm(
-      orderContainer as HTMLFormElement,
-      this.events
-    );
-
-    // Устанавливаем сохраненные данные
-    if (data.address) {
-      orderFormView.address = data.address;
+    
+    // Устанавливаем значения из модели
+    if (this.orderFormView) {
+      // Адрес
+      this.orderFormView.address = data.address || '';
+      
+      // Способ оплаты
+      if (data.payment === "card" || data.payment === "cash") {
+        this.orderFormView.setPayment(data.payment);
+      } else {
+        this.orderFormView.setPayment('');
+      }
     }
-
-    if (data.payment === "card" || data.payment === "cash") {
-      // Сначала устанавливаем значение
-      orderFormView.payment = data.payment;
-
-      // Потом программно кликаем на соответствующую кнопку
-      // чтобы обновить визуальное состояние и валидацию
-      setTimeout(() => {
-        const button = orderContainer.querySelector(
-          `button[name="${data.payment}"]`
-        );
-        if (button) {
-          (button as HTMLButtonElement).click();
-        }
-      }, 10);
+    
+    // Сбрасываем состояние touched полей
+    if (this.orderFormView) {
+      this.orderFormView.resetTouched();
+      this.orderFormView.setValidationErrors({});
     }
-
-    this.modalView.setContent(orderContainer);
+    
+    // Выполняем начальную валидацию
+    this.updateOrderFormValidation();
+    
+    // Показываем форму в модальном окне
+    this.modalView.setContent(this.orderFormView.getContainer());
     this.modalView.open();
   }
 
@@ -373,32 +513,50 @@ class AppPresenter {
       payment: data.payment as "card" | "cash",
       address: data.address,
     });
-
-    this.openContactsForm();
+    
+    // Проверяем валидацию полей формы заказа
+    const errors = this.buyerModel.validate(['payment', 'address']);
+    
+    if (!errors) {
+      this.openContactsForm();
+    } else {
+      // Показываем ошибки
+      console.error("Ошибки валидации формы заказа:", errors);
+    }
   }
 
   /**
    * Открытие формы контактов в модальном окне (второй шаг)
    */
   private openContactsForm(): void {
+    // Создаем форму, если еще не создана
+    if (!this.contactsFormView) {
+      const contactsContainer = cloneTemplate(this.contactsTemplate);
+      this.contactsFormView = new ContactsForm(
+        contactsContainer as HTMLFormElement,
+        this.events
+      );
+    }
+    
     const data = this.buyerModel.getData();
-
-    const contactsContainer = cloneTemplate(this.contactsTemplate);
-    const contactsFormView = new ContactsForm(
-      contactsContainer as HTMLFormElement,
-      this.events
-    );
-
-    // Устанавливаем сохраненные данные
-    if (data.email) {
-      contactsFormView.email = data.email;
+    
+    // Устанавливаем значения из модели
+    if (this.contactsFormView) {
+      this.contactsFormView.email = data.email || '';
+      this.contactsFormView.phone = data.phone || '';
     }
-
-    if (data.phone) {
-      contactsFormView.phone = data.phone;
+    
+    // Сбрасываем состояние touched полей
+    if (this.contactsFormView) {
+      this.contactsFormView.resetTouched();
+      this.contactsFormView.setValidationErrors({});
     }
-
-    this.modalView.setContent(contactsContainer);
+    
+    // Выполняем начальную валидацию
+    this.updateContactsFormValidation();
+    
+    // Показываем форму в модальном окне
+    this.modalView.setContent(this.contactsFormView.getContainer());
   }
 
   /**
@@ -413,6 +571,7 @@ class AppPresenter {
       phone: data.phone,
     });
 
+    // Проверяем валидацию всех полей перед отправкой
     const errors = this.buyerModel.validate();
     if (errors) {
       console.error("Ошибки валидации:", errors);
@@ -460,10 +619,24 @@ class AppPresenter {
       const response = await this.apiService.createOrder(order);
       console.log("Заказ создан:", response);
 
+      // Показываем сообщение об успехе
       this.showSuccess(response.total);
 
+      // Очищаем корзину
       this.cartModel.clear();
+      
+      // Очищаем данные покупателя
       this.buyerModel.clear();
+
+      // Сбрасываем состояние форм
+      if (this.orderFormView) {
+        this.orderFormView.resetTouched();
+      }
+      
+      if (this.contactsFormView) {
+        this.contactsFormView.resetTouched();
+      }
+      
     } catch (error) {
       console.error("Ошибка при создании заказа:", error);
     }

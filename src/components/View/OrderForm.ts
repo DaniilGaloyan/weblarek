@@ -1,5 +1,6 @@
 import { ensureElement } from "../../utils/utils";
 import { Form, IFormEvents } from "./Form";
+import { OrderSubmitEvent, PaymentSelectedEvent, OrderFieldChangedEvent } from "../../types";
 
 /**
  * Интерфейс данных для отображения формы первого шага оформления заказа
@@ -37,6 +38,11 @@ export class OrderForm extends Form<IOrderForm> {
   protected _selectedPayment: string = "";
 
   /**
+   * @type {Set<string>} - множество полей, с которыми пользователь взаимодействовал
+   */
+  private _touchedFields: Set<string> = new Set();
+
+  /**
    * Создает экземпляр формы оформления заказа
    * @param {HTMLFormElement} container - корневой DOM-элемент формы
    * @param {IFormEvents} events - абстрактный интерфейс для генерации событий
@@ -53,72 +59,58 @@ export class OrderForm extends Form<IOrderForm> {
     this._paymentButtons = paymentButtons;
     this._addressInput = addressInput;
 
-    // Настраиваем валидацию после инициализации всех полей
-    this.setupValidation();
+    // Настраиваем обработчики событий
+    this.setupEventHandlers();
   }
 
   /**
-   * Настраивает валидацию формы
+   * Настраивает обработчики событий
    */
-  protected setupValidation(): void {
+  protected setupEventHandlers(): void {
     // Настройка обработчиков для кнопок оплаты
     this._paymentButtons.forEach((button) => {
       button.addEventListener("click", () => {
-        this.setPayment(button.name);
-        this.events.emit("payment:selected", { payment: button.name });
-        this.validate();
+        this._touchedFields.add("payment");
+        this.events.emit<PaymentSelectedEvent>("payment:selected", { payment: button.name });
       });
     });
 
-    // Настройка валидации поля адреса
+    // Настройка обработчиков для поля адреса
     this._addressInput.addEventListener("input", () => {
-      this.validate();
+      this._touchedFields.add("address");
+      this.events.emit<OrderFieldChangedEvent>("order:field-changed", { 
+        field: "address", 
+        value: this._addressInput.value 
+      });
     });
-  }
 
-  /**
-   * Проверяет валидность формы
-   * @returns {boolean} - true если форма валидна
-   */
-  protected validate(): boolean {
-    const isValid = this._selectedPayment !== "" && this._addressInput.value.trim() !== "";
-
-    if (!isValid) {
-      const errors: Record<string, string> = {};
-
-      if (this._selectedPayment === "") {
-        errors.payment = "выбрать способ оплаты";
+    // При потере фокуса отмечаем как touched только если было введено значение
+    this._addressInput.addEventListener("blur", () => {
+      if (this._addressInput.value.trim() !== "") {
+        this._touchedFields.add("address");
+        this.events.emit<OrderFieldChangedEvent>("order:field-changed", {
+          field: "address",
+          value: this._addressInput.value
+        });
       }
-        
-      if (this._addressInput.value.trim() === "") {
-        errors.address = "указать адрес";
-      }
-
-      this.setErrors(errors);
-      this.events.emit("form:error", { errors });
-    } else {
-      this.clearErrors();
-    }
-
-    this.toggleSubmitButton(isValid);
-    return isValid;
+    });
   }
 
   /**
    * Обрабатывает отправку формы
    */
   protected onSubmit(): void {
-    if (this.validate()) {
-      this.events.emit("order:submit", {
-        payment: this._selectedPayment,
-        address: this._addressInput.value,
-      });
-    }
+    // Эмитим событие отправки формы
+    // Валидация будет происходить в BuyerModel через презентер
+    this.events.emit<OrderSubmitEvent>("order:submit", {
+      payment: this._selectedPayment,
+      address: this._addressInput.value,
+    });
   }
 
   /**
-   * Устанавливает способ оплаты
-   * @param {string} payment - способ оплаты ('card' или 'cash')
+   * Устанавливает способ оплаты (вызывается извне, из презентера)
+   * @param {string} payment - способ оплаты ('card', 'cash' или пустая строка)
    */
   setPayment(payment: string): void {
     this._selectedPayment = payment;
@@ -141,15 +133,40 @@ export class OrderForm extends Form<IOrderForm> {
    */
   set address(address: string) {
     this._addressInput.value = address;
-    this.validate();
   }
 
   /**
-   * Устанавливает способ оплаты (сеттер для совместимости)
-   * @param {string} payment - способ оплаты ('card' или 'cash')
+   * Устанавливает ошибки валидации, полученные из модели
+   * @param {Record<string, string>} errors - объект с ошибками валидации
    */
+  setValidationErrors(errors: Record<string, string>): void {
+    const filteredErrors: Record<string, string> = {};
+    
+    // Показываем ошибки только для touched полей
+    if (errors.payment && this._touchedFields.has("payment")) {
+      filteredErrors.payment = errors.payment;
+    }
+    
+    if (errors.address && this._touchedFields.has("address")) {
+      filteredErrors.address = errors.address;
+    }
+    
+    if (Object.keys(filteredErrors).length === 0) {
+      this.clearErrors();
+    } else {
+      this.setErrors(filteredErrors);
+    }
+  }
+
+  /**
+   * Сбрасывает состояние touched полей
+   */
+  resetTouched(): void {
+    this._touchedFields.clear();
+  }
+
+  // Сеттер для совместимости
   set payment(payment: string) {
     this.setPayment(payment);
-    this.validate();
-  }  
+  }
 }

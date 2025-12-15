@@ -53,32 +53,48 @@ export class BuyerModel {
 
   /**
    * Проверяет валидность данных покупателя.
-   * @returns {Record<keyof IBuyer, string> | null} - объект с ошибками (для невалидных полей) или null (все данные корректны)
+   * @param {Array<keyof IBuyer>} [fields] - опциональный массив полей для проверки
+   * @returns {Record<keyof IBuyer, string> | null} - объект с ошибками или null
    */
-  validate(): Record<keyof IBuyer, string> | null {
+  validate(fields?: Array<keyof IBuyer>): Record<keyof IBuyer, string> | null {
     const errors: Partial<Record<keyof IBuyer, string>> = {};
     const { payment, email, phone, address } = this._data;
 
+    // Определяем какие поля проверять
+    const fieldsToValidate = fields || ['payment', 'email', 'phone', 'address'];
+
     // Проверка способа оплаты
-    if (!payment) {
-      errors.payment = "Не выбран способ оплаты";
-    } else if (!this.isValidPayment(payment)) {
-      errors.payment = "Некорректный способ оплаты";
+    if (fieldsToValidate.includes('payment')) {
+      if (!payment) {
+        errors.payment = "Не выбран способ оплаты";
+      } else if (!this.isValidPayment(payment)) {
+        errors.payment = "Некорректный способ оплаты";
+      }
     }
 
     // Проверка email
-    if (!email || email.trim() === "") {
-      errors.email = "Укажите email";
+    if (fieldsToValidate.includes('email')) {
+      if (!email || email.trim() === "") {
+        errors.email = "Укажите email";
+      } else if (!this.isValidEmail(email)) {
+        errors.email = "Некорректный формат email";
+      }
     }
 
     // Проверка телефона
-    if (!phone || phone.trim() === "") {
-      errors.phone = "Укажите телефон";
+    if (fieldsToValidate.includes('phone')) {
+      if (!phone || phone.trim() === "") {
+        errors.phone = "Укажите телефон";
+      } else if (!this.isValidPhone(phone)) {
+        errors.phone = "Некорректный формат телефона";
+      }
     }
 
     // Проверка адреса
-    if (!address || address.trim() === "") {
-      errors.address = "Укажите адрес доставки";
+    if (fieldsToValidate.includes('address')) {
+      if (!address || address.trim() === "") {
+        errors.address = "Укажите адрес доставки";
+      }
     }
 
     // Если есть ошибки, возвращаем объект с ними, иначе возвращаем null
@@ -94,5 +110,48 @@ export class BuyerModel {
    */
   private isValidPayment(value: string): value is TPayment {
     return value === "card" || value === "cash";
+  }
+
+  /**
+   * Проверяет, является ли значение корректным email
+   * @param {string} email - проверяемый email
+   * @returns {boolean} - true, если email корректный
+   */
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  /**
+   * Проверяет, является ли значение корректным телефоном
+   * @param {string} phone - проверяемый телефон
+   * @returns {boolean} - true, если телефон корректный
+   */
+  private isValidPhone(phone: string): boolean {
+    // Простая проверка российских телефонов
+    const phoneRegex = /^(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}$/;
+    return phoneRegex.test(phone.replace(/\s+/g, ''));
+  }
+
+  /**
+   * Проверяет, заполнены ли поля для первого шага заказа
+   * @returns {boolean} - true если все поля заполнены
+   */
+  isOrderStepComplete(): boolean {
+    const { payment, address } = this._data;
+    const isPaymentSelected = payment && (payment === "card" || payment === "cash");
+    const isAddressFilled = address && address.trim() !== "";
+    return Boolean(isPaymentSelected && isAddressFilled);
+  }
+
+  /**
+   * Проверяет, заполнены ли поля для второго шага заказа
+   * @returns {boolean} - true если все поля заполнены
+   */
+  isContactsStepComplete(): boolean {
+    const { email, phone } = this._data;
+    const isEmailFilled = email && email.trim() !== "";
+    const isPhoneFilled = phone && phone.trim() !== "";
+    return Boolean(isEmailFilled && isPhoneFilled);
   }
 }

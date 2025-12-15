@@ -145,6 +145,82 @@ Presenter - презентер содержит основную логику п
   - `phone: string` — номер телефона;
   - `address: string` — адрес доставки.
 
+### Интерфейс IProductListResponse
+Описывает ответ сервера при запросе списка товаров
+
+**Поля:**
+- `items: IProduct[]` — массив товаров, полученных с сервера
+
+### Интерфейс CatalogChangedEvent
+Описывает событие изменения каталога товаров. Генерируется, когда изменяется список товаров в каталоге.
+
+**Поля:**
+- `items: IProduct[]` — текущий список товаров в каталоге
+
+### Интерфейс SelectedItemChangedEvent
+Описывает событие изменения выбранного товара. Генерируется при выборе или отмене выбора товара.
+
+**Поля:**
+- `selectedItem: IProduct | null` — выбранный товар или null, если выбор снят
+
+### Интерфейс CartChangedEvent
+Описывает событие изменения состояния корзины. Генерируется при добавлении, удалении или изменении товаров в корзине.
+
+**Поля:**
+- `items: IProduct[]` — текущий список товаров в корзине
+
+### Интерфейс CardSelectEvent
+Описывает событие выбора карточки в каталоге. Генерируется при клике на товар в каталоге для просмотра деталей.
+
+**Поля:**
+- `product: IProduct` — товар, на котором произошло событие
+
+### Интерфейс CardButtonClickEvent
+Описывает событие клика на кнопку карточки. Генерируется при взаимодействии с кнопкой на карточке товара.
+
+**Поля:**
+- `productId: string` — идентификатор товара
+
+### Интерфейс BasketRemoveEvent
+Описывает событие удаления товара из корзины. Генерируется при удалении конкретного товара из корзины.
+
+**Поля:**
+- `id: string` — идентификатор удаляемого товара
+
+### Интерфейс PaymentSelectedEvent
+Описывает событие выбора способа оплаты
+
+**Поля:**
+- `payment: string` — выбранный способ оплаты
+
+### Интерфейс OrderFieldChangedEvent
+Описывает событие изменения поля формы заказа
+
+**Поля:**
+- `field: string` — имя измененного поля
+- `value: string` — новое значение поля
+
+### Интерфейс ContactsFieldChangedEvent
+Описывает событие изменения поля формы контактов
+
+**Поля:**
+- `field: string` — имя измененного поля
+- `value: string` — новое значение поля
+
+### Интерфейс OrderSubmitEvent
+Описывает событие отправки формы первого шага оформления заказа
+
+**Поля:**
+- `payment: string` — выбранный способ оплаты
+- `address: string` — адрес доставки
+
+### Интерфейс ContactsSubmitEvent
+Описывает событие отправки формы второго шага оформления заказа
+
+**Поля:**
+- `email: string` — адрес электронной почты
+- `phone: string` — номер телефона
+
 
 ## Модели данных
 Модели данных отвечают за хранение и управление данными приложения. Они не зависят от представления и других слоёв приложения.
@@ -200,7 +276,13 @@ Presenter - презентер содержит основную логику п
 - `setData(data: Partial<IBuyer>): void` — сохраняет данные покупателя и генерирует событие `buyer:changed`;
 - `getData(): Partial<IBuyer>` — возвращает все сохранённые данные покупателя;
 - `clear(): void` — очищает все данные покупателя и генерирует событие `buyer:changed`;
-- `validate(): Record<keyof IBuyer, string> | null` — проверяет валидность данных. Возвращает объект с ошибками для невалидных полей или `null`, если все данные корректны.
+- `validate(fields?: Array<keyof IBuyer>): Record<keyof IBuyer, string> | null` — проверяет валидность данных;
+- `isOrderStepComplete(): boolean` — проверяет, заполнены ли обязательные поля для первого шага заказа (способ оплаты и адрес);
+- `isContactsStepComplete(): boolean` — проверяет, заполнены ли обязательные поля для второго шага заказа (email и телефон);
+- `private isValidPayment(value: string): value is TPayment` — проверяет, является ли значение корректным способом оплаты;
+- `private isValidEmail(email: string): boolean` — проверяет, является ли значение корректным email;
+- `private isValidPhone(phone: string): boolean` — проверяет, является ли значение корректным телефоном.
+
 
 ## Слой коммуникации
 Класс ApiService отвечает за взаимодействие с сервером через API. Использует композицию с классом Api для выполнения HTTP-запросов.
@@ -438,17 +520,22 @@ Presenter - презентер содержит основную логику п
 - `events: IFormEvents` — абстрактный интерфейс для генерации событий.
 
 **Поля:**
+- `protected container: HTMLFormElement` — корневой элемент формы;
+- `protected events: IFormEvents` — абстрактный интерфейс для генерации событий;
 - `protected _submitButton: HTMLButtonElement` — кнопка отправки формы;
 - `protected _errorContainer: HTMLElement` — контейнер для отображения ошибок;
 - `protected _inputs: Map<string, HTMLInputElement>` — коллекция полей ввода формы.
 
 **Методы:**
-- `protected toggleSubmitButton(enable: boolean): void` — активирует/деактивирует кнопку отправки;
+- `protected setupEventHandlers(): void` — настройка обработчиков событий;
+- `protected onSubmit(): void` — обработка отправки формы;
+- `protected toggleSubmitButton(enable: boolean): void` — внутренний метод для активации/деактивации кнопки отправки;
 - `protected setErrors(errors: Record<string, string>): void` — отображает ошибки валидации;
 - `protected clearErrors(): void` — очищает отображение ошибок;
-- `protected abstract validate(): boolean` — проверяет валидность данных формы;
-- `protected abstract setupValidation(): void` — настройка валидации для конкретного типа формы;
-- `protected abstract onSubmit(): void` — обработка отправки формы.
+- `setValidationErrors(errors: Record<string, string>): void` — устанавливает ошибки валидации, полученные из модели;
+- `setSubmitEnabled(enabled: boolean): void` — публичный метод для активации/деактивации кнопки отправки;
+- `getContainer(): HTMLFormElement` — возвращает корневой элемент формы;
+- `resetTouched(): void` — сбрасывает состояние touched полей.
 
 ### Интерфейс IFormEvents
 Абстрактный интерфейс для событий форм, обеспечивающий соблюдение инверсии зависимостей.
@@ -467,19 +554,22 @@ Presenter - презентер содержит основную логику п
 **Поля:**
 - `protected _paymentButtons: NodeListOf<HTMLButtonElement>` — кнопки выбора способа оплаты;
 - `protected _addressInput: HTMLInputElement` — поле ввода адреса доставки;
-- `protected _selectedPayment: string` — текущий выбранный способ оплаты.
+- `protected _selectedPayment: string` — текущий выбранный способ оплаты;
+- `protected _touchedFields: Set<string>` — множество полей, с которыми пользователь взаимодействовал.
 
 **Методы:**
-- `protected validate(): boolean` — проверяет валидность данных формы (выбрана кнопка оплаты и заполнено поле адреса доставки);
-- `protected setupValidation(): void` — настраивает валидацию для полей формы;
-- `protected onSubmit(): void` — обрабатывает отправку формы;
-- `setPayment(payment: string): void` — устанавливает способ оплаты (добавляет класс `button_alt-active` выбранной кнопке);
-- `set address(address: string): void` — устанавливает адрес доставки.
+- `protected setupEventHandlers(): void` — настраивает обработчики событий для кнопок оплаты и поля адреса;
+- `protected onSubmit(): void` — обрабатывает отправку формы и генерирует событие `order:submit`;
+- `setPayment(payment: string): void` — устанавливает способ оплаты (добавляет класс `button_alt-active` выбранной кнопке и удаляет у остальных);
+- `set payment(payment: string): void` — сеттер для установки способа оплаты (вызывает `setPayment()`);
+- `set address(address: string): void` — устанавливает адрес доставки;
+- `setValidationErrors(errors: Record<string, string>): void` — устанавливает ошибки валидации, полученные из модели (отображает только для touched полей);
+- `resetTouched(): void` — сбрасывает состояние touched полей.
 
 **Генерируемые события:**
-- `order:submit` — при успешной отправке формы (передает данные `{ payment, address }`);
+- `order:submit` — при отправке формы (передает данные `{ payment, address }`);
 - `payment:selected` — при выборе способа оплаты (передает данные `{ payment }`);
-- `form:error` — при ошибках валидации формы (передает данные `{ errors }`).
+- `order:field-changed` — при изменении поля адреса доставки (передает данные `{ field, value }`).
 
 ### Интерфейс IOrderForm
 Определяет структуру данных, необходимых для отображения формы первого шага оформления заказа.
@@ -498,20 +588,20 @@ Presenter - презентер содержит основную логику п
 
 **Поля:**
 - `protected _emailInput: HTMLInputElement` — поле ввода email;
-- `protected _phoneInput: HTMLInputElement` — поле ввода телефона.
+- `protected _phoneInput: HTMLInputElement` — поле ввода телефона;
+- `protected _touchedFields: Set<string>` — множество полей, с которыми пользователь взаимодействовал.
 
 **Методы:**
-- `protected validate(): boolean` — проверяет валидность данных формы (email и телефон);
-- `protected setupValidation(): void` — настраивает валидацию для полей формы;
-- `protected onSubmit(): void` — обрабатывает отправку формы;
-- `set email(value: string): void` — устанавливает значение email;
-- `set phone(value: string): void` — устанавливает значение телефона;
-- `protected isValidEmail(email: string): boolean` — метод проверки формата email;
-- `protected isValidPhone(phone: string): boolean` — метод проверки формата телефона.
+- `protected setupEventHandlers(): void` — настраивает обработчики событий для полей ввода email и телефона;
+- `protected onSubmit(): void` — обрабатывает отправку формы (эмитит событие `contacts:submit`);
+- `set email(email: string): void` — устанавливает значение email;
+- `set phone(phone: string): void` — устанавливает значение телефона;
+- `setValidationErrors(errors: Record<string, string>): void` — устанавливает ошибки валидации, полученные из модели (отображает только для touched полей);
+- `resetTouched(): void` — сбрасывает состояние touched полей.
 
 **Генерируемые события:**
-- `contacts:submit` — при успешной отправке формы (передает данные `{ email, phone }`);
-- `form:error` — при ошибках валидации формы (передает данные `{ errors }`).
+- `contacts:submit` — при отправке формы (передает данные `{ email, phone }`);
+- `contacts:field-changed` — при изменении полей email или телефона (передает данные `{ field, value }`).
 
 ### Интерфейс IContactsForm
 Определяет структуру данных, необходимых для отображения формы второго шага оформления заказа.
@@ -578,17 +668,23 @@ Presenter - презентер содержит основную логику п
 - `private events: EventEmitter` — брокер событий;
 - `private currentBasketView: BasketView | null` — текущее открытое представление корзины.
 
-**Основные методы:**
+**Методы:**
 - `private setupEventHandlers(): void` — настраивает обработчики для всех событий в системе;
 - `private loadProducts(): Promise<void>` — загружает товары с сервера через `ApiService`;
 - `private renderCatalog(): void` — отрисовывает каталог товаров на основе данных из `CatalogModel`;
 - `private renderProductPreview(): void` — отрисовывает детальный просмотр выбранного товара;
 - `private updateHeader(): void` — обновляет счетчик товаров в корзине в шапке сайта;
+- `private updateCurrentBasketView(): void` — обновляет текущее открытое представление корзины;
 - `private openBasket(): void` — открывает корзину товаров в модальном окне;
 - `private openOrderForm(): void` — открывает форму оформления заказа (первый шаг);
 - `private openContactsForm(): void` — открывает форму ввода контактных данных (второй шаг);
 - `private handleOrderSubmit(data: { payment: string, address: string }): void` — обрабатывает отправку формы заказа;
 - `private handleContactsSubmit(data: { email: string, phone: string }): Promise<void>` — обрабатывает отправку формы контактов;
+- `private handleContactsFieldChanged(field: string, value: string): void` — обрабатывает изменение поля формы контактов (сохраняет в `BuyerModel`, выполняет валидацию);
+- `private handlePaymentSelected(payment: string): void` — обрабатывает выбор способа оплаты (сохраняет в `BuyerModel`, обновляет `OrderForm`);
+- `private handleOrderFieldChanged(field: string, value: string): void` — обрабатывает изменение поля формы заказа (сохраняет в `BuyerModel`, выполняет валидацию);
+- `private updateOrderFormValidation(): void` — обновляет валидацию и состояние формы заказа на основе данных из `BuyerModel`;
+- `private updateContactsFormValidation(): void` — обновляет валидацию и состояние формы контактов на основе данных из `BuyerModel`;
 - `private createOrder(): Promise<void>` — создает и отправляет заказ на сервер через `ApiService`;
 - `private showSuccess(total: number): void` — показывает сообщение об успешном оформлении заказа.
 
@@ -618,6 +714,7 @@ Presenter - презентер содержит основную логику п
 - `basket:clear` — генерируется `BasketView` при очистке корзины. Событие без данных;
 - `order:submit` — генерируется `OrderForm` при отправке формы заказа. Содержит данные: `{ payment: string, address: string }`;
 - `payment:selected` — генерируется `OrderForm` при выборе способа оплаты. Содержит данные: `{ payment: string }`;
+- `order:field-changed` — генерируется `OrderForm` при изменении поля адреса доставки. Содержит данные: `{ field: string, value: string }`;
 - `contacts:submit` — генерируется `ContactsForm` при отправке формы контактов. Содержит данные: `{ email: string, phone: string }`;
-- `form:error` — генерируется `OrderForm` и `ContactsForm` при ошибках валидации формы. Содержит данные: `{ errors: Record<string, string> }`;
+- `contacts:field-changed` — генерируется `ContactsForm` при изменении полей email или телефона. Содержит данные: `{ field: string, value: string }`;
 - `success:close` — генерируется `SuccessView` при закрытии окна успешного оформления. Событие без данных.

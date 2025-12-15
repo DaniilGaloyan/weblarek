@@ -1,5 +1,6 @@
 import { ensureElement } from "../../utils/utils";
 import { Form, IFormEvents } from "./Form";
+import { ContactsSubmitEvent, ContactsFieldChangedEvent } from "../../types";
 
 /**
  * Интерфейс данных для отображения формы контактных данных
@@ -32,6 +33,11 @@ export class ContactsForm extends Form<IContactsForm> {
   protected _phoneInput: HTMLInputElement;
 
   /**
+   * @type {Set<string>} - множество полей, с которыми пользователь взаимодействовал
+   */
+  private _touchedFields: Set<string> = new Set();
+
+  /**
    * Создает экземпляр формы контактных данных
    * @param {HTMLFormElement} container - корневой DOM-элемент формы
    * @param {IFormEvents} events - абстрактный интерфейс для генерации событий
@@ -48,90 +54,95 @@ export class ContactsForm extends Form<IContactsForm> {
     this._emailInput = emailInput;
     this._phoneInput = phoneInput;
 
-    // Настраиваем валидацию
-    this.setupValidation();
+    // Настраиваем обработчики событий для полей ввода
+    this.setupEventHandlers();
   }
 
   /**
-   * Настраивает валидацию формы
+   * Настраивает обработчики событий для полей ввода
    */
-  protected setupValidation(): void {
-    // Настройка валидации полей при вводе
+  protected setupEventHandlers(): void {
+    // При изменении email эмитим событие
     this._emailInput.addEventListener("input", () => {
-      this.validate();
+      this._touchedFields.add("email");
+      this.events.emit<ContactsFieldChangedEvent>("contacts:field-changed", { 
+        field: "email", 
+        value: this._emailInput.value 
+      });
     });
 
+    // При изменении телефона эмитим событие
     this._phoneInput.addEventListener("input", () => {
-      this.validate();
+      this._touchedFields.add("phone");
+      this.events.emit<ContactsFieldChangedEvent>("contacts:field-changed", { 
+        field: "phone", 
+        value: this._phoneInput.value 
+      });
     });
-  }
 
-  /**
-   * Проверяет валидность формы
-   * @returns {boolean} - true если форма валидна
-   */
-  protected validate(): boolean {
-    const email = this._emailInput.value.trim();
-    const phone = this._phoneInput.value.trim();
+    // При потере фокуса отмечаем как touched только если было введено значение
+    this._emailInput.addEventListener("blur", () => {
+      if (this._emailInput.value.trim() !== "") {
+        this._touchedFields.add("email");
+        this.events.emit<ContactsFieldChangedEvent>("contacts:field-changed", {
+          field: "email",
+          value: this._emailInput.value
+        });
+      }
+    });
 
-    const isEmailValid = this.isValidEmail(email);
-    const isPhoneValid = this.isValidPhone(phone);
-    const isValid = isEmailValid && isPhoneValid;
-
-    if (!isValid) {
-      const errors: Record<string, string> = {};
-      if (!isEmailValid) errors.email = "указать корректный email";
-      if (!isPhoneValid) errors.phone = "ввести корректный телефон";
-
-      this.setErrors(errors);
-      this.events.emit("form:error", { errors });
-    } else {
-      this.clearErrors();
-    }
-
-    this.toggleSubmitButton(isValid);
-    return isValid;
+    this._phoneInput.addEventListener("blur", () => {
+      if (this._phoneInput.value.trim() !== "") {
+        this._touchedFields.add("phone");
+        this.events.emit<ContactsFieldChangedEvent>("contacts:field-changed", {
+          field: "phone",
+          value: this._phoneInput.value
+        });
+      }
+    });
   }
 
   /**
    * Обрабатывает отправку формы
    */
   protected onSubmit(): void {
-    if (this.validate()) {
-      this.events.emit("contacts:submit", {
-        email: this._emailInput.value,
-        phone: this._phoneInput.value,
-      });
+    // Эмитим событие отправки формы
+    // Валидация будет происходить в BuyerModel через презентер
+    this.events.emit<ContactsSubmitEvent>("contacts:submit", {
+      email: this._emailInput.value,
+      phone: this._phoneInput.value,
+    });
+  }
+
+  /**
+   * Устанавливает ошибки валидации, полученные из модели
+   * @param {Record<string, string>} errors - объект с ошибками валидации
+   */
+  setValidationErrors(errors: Record<string, string>): void {
+    const filteredErrors: Record<string, string> = {};
+    
+    // Показываем ошибки только для touched полей
+    if (errors.email && this._touchedFields.has("email")) {
+      filteredErrors.email = errors.email;
+    }
+    
+    if (errors.phone && this._touchedFields.has("phone")) {
+      filteredErrors.phone = errors.phone;
+    }
+    
+    if (Object.keys(filteredErrors).length === 0) {
+      this.clearErrors();
+    } else {
+      this.setErrors(filteredErrors);
     }
   }
 
-  /**
-   * Проверяет валидность email
-   * @param {string} email - email для проверки
-   * @returns {boolean} - true если email валиден
-   */
-  protected isValidEmail(email: string): boolean {
-    return email !== "" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-
-  /**
-   * Проверяет валидность телефона
-   * @param {string} phone - телефон для проверки
-   * @returns {boolean} - true если телефон валиден
-   */
-  protected isValidPhone(phone: string): boolean {
-    return (
-      phone !== "" && /^\+?[78][-\(]?\d{3}\)?-?\d{3}-?\d{2}-?\d{2}$/.test(phone)
-    );
-  }
- 
   /**
    * Устанавливает email
    * @param {string} email - адрес электронной почты
    */
   set email(email: string) {
     this._emailInput.value = email;
-    this.validate();
   }
 
   /**
@@ -140,6 +151,12 @@ export class ContactsForm extends Form<IContactsForm> {
    */
   set phone(phone: string) {
     this._phoneInput.value = phone;
-    this.validate();
+  }
+
+  /**
+   * Сбрасывает состояние touched полей
+   */
+  resetTouched(): void {
+    this._touchedFields.clear();
   }
 }

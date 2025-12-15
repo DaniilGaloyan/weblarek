@@ -68,27 +68,18 @@ export abstract class Form<T> extends Component<T> {
       }
     });
 
-    // Базовые настройки валидации
+    // Обработчик отправки формы
     this.container.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (this.validate()) {
-        this.onSubmit();
-      }
+      this.onSubmit();
     });
   }
 
   /**
-   * Абстрактный метод для настройки валидации формы
+   * Абстрактный метод настройки обработчиков событий
    * Должен быть реализован в дочерних классах
    */
-  protected abstract setupValidation(): void;
-
-  /**
-   * Абстрактный метод валидации формы
-   * Должен быть реализован в дочерних классах
-   * @returns {boolean} - true если форма валидна
-   */
-  protected abstract validate(): boolean;
+  protected abstract setupEventHandlers(): void;
 
   /**
    * Абстрактный метод обработки отправки формы
@@ -114,7 +105,7 @@ export abstract class Form<T> extends Component<T> {
     if (errorMessages.length === 0) {
       this._errorContainer.textContent = "";
     } else {
-      this._errorContainer.textContent = "Необходимо " + errorMessages.join(" и ");
+      this._errorContainer.textContent = errorMessages.join(". ");
     }
   }
 
@@ -123,5 +114,42 @@ export abstract class Form<T> extends Component<T> {
    */
   protected clearErrors(): void {
     this._errorContainer.textContent = "";
+  }
+
+  /**
+   * Устанавливает ошибки валидации, полученные из модели
+   * @param {Record<string, string>} errors - объект с ошибками валидации
+   */
+  setValidationErrors(errors: Record<string, string>): void {
+    if (Object.keys(errors).length === 0) {
+      this.clearErrors();
+    } else {
+      this.setErrors(errors);
+    }
+  }
+
+  /**
+   * Активирует/деактивирует кнопку отправки (публичный метод)
+   * @param {boolean} enabled - true для активации кнопки
+   */
+  setSubmitEnabled(enabled: boolean): void {
+    this.toggleSubmitButton(enabled);
+  }
+
+  /**
+   * Возвращает корневой элемент формы
+   * @returns {HTMLFormElement} - корневой DOM-элемент формы
+   */
+  getContainer(): HTMLFormElement {
+    return this.container;
+  }
+
+  /**
+   * Сбрасывает состояние touched полей
+   * Может быть переопределен в дочерних классах
+   */
+  resetTouched(): void {
+    // Базовая реализация пустая
+    // Дочерние классы должны переопределить если нужно
   }
 }
